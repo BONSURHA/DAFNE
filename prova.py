@@ -2,7 +2,6 @@ import math
 import random
 import requests
 from PIL import Image
-from io import BytesIO
 import matplotlib.pyplot as plt
 
 
@@ -21,19 +20,16 @@ def find_closest_cell(point, sites):
         if distance < min_distance:
             min_distance = distance
             closest_site = site
-
     return closest_site
 
 
-# Funzione per creare una tassellazione Voronoi
+# creare una tassellazione Voronoi
 def create_voronoi(width, height, num_sites):
-    # Genera punti casuali (i siti) all'interno del rettangolo delimitato da (0,0) e (width, height)
-    sites = [(random.randint(0, width), random.randint(0, height)) for _ in range(num_sites)]
+    # sites = [(random.randint(0, width), random.randint(0, height)) for _ in range(num_sites)]
+    sites = [(random.uniform(0, width), random.uniform(0, height)) for _ in range(num_sites)]
 
-    # Crea un dizionario per memorizzare le celle Voronoi
     voronoi_cells = {site: [] for site in sites}
 
-    # Calcola la cella Voronoi per ogni punto all'interno del rettangolo
     for x in range(width):
         for y in range(height):
             point = (x, y)
@@ -43,7 +39,7 @@ def create_voronoi(width, height, num_sites):
     return voronoi_cells
 
 
-# Funzione per disegnare la tassellazione Voronoi
+# disegnare la tassellazione Voronoi
 def plot_voronoi(voronoi_cells, width, height):
     for site, cell in voronoi_cells.items():
         x_values, y_values = zip(*cell)
@@ -51,22 +47,24 @@ def plot_voronoi(voronoi_cells, width, height):
 
     plt.xlim(0, width)
     plt.ylim(0, height)
-    plt.xlabel("X")
-    plt.ylabel("Y")
-    plt.title("Voronoi Diagram")
-    plt.grid(True)
+    plt.xlabel("height")
+    plt.ylabel("width")
     plt.show()
 
 
-if __name__ == "__main__":
-    url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse1.mm.bing.net%2Fth%3Fid%3DOIP.bv5T6lKWlirzkkMt64og-wHaFh%26pid%3DApi&f=1&ipt=63038a6006335b1016ae0db1141fa061c5547086647d1198fcee20a8b2504b70&ipo=images"
-    response = requests.get(url)
-    response.raise_for_status()
+def calculate_num_sites(width, height):
+    return int(math.sqrt(width * height))
 
-    image = Image.open(BytesIO(response.content))
+
+if __name__ == "__main__":
+    url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Leonardo_Magi.jpg/600px-Leonardo_Magi.jpg"
+    # url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse1.mm.bing.net%2Fth%3Fid%3DOIP.bv5T6lKWlirzkkMt64og-wHaFh%26pid%3DApi&f=1&ipt=63038a6006335b1016ae0db1141fa061c5547086647d1198fcee20a8b2504b70&ipo=images"
+    image = Image.open(requests.get(url, stream=True).raw)
     width, height = image.size
-    num_sites = 500
+    num_sites = calculate_num_sites(width, height)
+    print(width)
+    print(height)
+    print(num_sites)
 
     voronoi_cells = create_voronoi(width, height, num_sites)
-
     plot_voronoi(voronoi_cells, width, height)
