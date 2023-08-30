@@ -1,32 +1,35 @@
 import numpy as np
+from scipy.spatial import Voronoi
+import random
 import matplotlib.pyplot as plt
-from scipy.spatial import Voronoi, voronoi_plot_2d
-import requests
+from urllib.request import urlopen
 from PIL import Image
-from io import BytesIO
 
-def generate_voronoi_tessellation(num_tiles, width, height):
-    # Genera coordinate casuali per i punti (tasselli)
-    points = np.random.rand(num_tiles, 2) * np.array([width, height])
-    # Calcola la tassellazione di Voronoi
-    vor = Voronoi(points)
-    # Disegna la tassellazione di Voronoi
-    voronoi_plot_2d(vor)
-    plt.xlim([0, width])
-    plt.ylim([0, height])
-    plt.show()
+# Carica l'immagine di input
+url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Leonardo_Magi.jpg/600px-Leonardo_Magi.jpg"
+input_image = Image.open(urlopen(url))
+input_data = np.array(input_image)
 
+# Genera punti casuali per la tessellazione di Voronoi
+num_points = 100
+points = np.random.randint(0, min(input_data.shape[:2]), size=(num_points, 2))
 
-# Esempio di utilizzo: genera 10 tasselli in un'area 100x100
-num_tiles = 500
-url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse1.mm.bing.net%2Fth%3Fid%3DOIP.bv5T6lKWlirzkkMt64og-wHaFh%26pid%3DApi&f=1&ipt=63038a6006335b1016ae0db1141fa061c5547086647d1198fcee20a8b2504b70&ipo=images"
-response = requests.get(url)
-response.raise_for_status()  # Controlla se la richiesta ha avuto successo (status code 200)
+# Calcola la tessellazione di Voronoi
+vor = Voronoi(points)
 
-# Apri l'immagine scaricata usando PIL (o Pillow)
-image = Image.open(BytesIO(response.content))
-# Ottieni le dimensioni dell'immagine
-width, height = image.size
-print(width)
-print(height)
-generate_voronoi_tessellation(num_tiles, width, height)
+# Assegna colori casuali ai punti di Voronoi
+colors = np.random.randint(0, 256, size=(num_points, 3))
+
+# Inizializza l'immagine di output con zeri
+output_data = np.zeros_like(input_data)
+
+# Per ogni pixel nell'immagine di input, trova il punto di Voronoi più vicino e assegna il colore corrispondente
+for y in range(input_data.shape[0]):
+    for x in range(input_data.shape[1]):
+        nearest_point_index = vor.point_region[np.argmin(np.linalg.norm(points - [x, y], axis=1))]
+        color = colors[nearest_point_index]
+        output_data[y, x] = color
+
+# Crea e visualizza l'immagine di output
+output_image = Image.fromarray(output_data.astype(np.uint8))
+output_image.show()

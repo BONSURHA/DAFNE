@@ -1,0 +1,11 @@
+# Funzione per creare un'immagine del frammento
+def create_fragment_image(fragment_cell, input_image):
+    fragment_image = Image.new("RGB", input_image.size)
+    draw = ImageDraw.Draw(fragment_image)
+
+    for point in fragment_cell:
+        x, y = point
+        pixel = input_image.getpixel((x, y))
+        draw.point((x, y), fill=pixel)
+
+    return fragment_image

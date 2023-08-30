@@ -1,6 +1,6 @@
 import math
 import random
-import requests
+from urllib.request import urlopen
 from PIL import Image
 import matplotlib.pyplot as plt
 
@@ -52,6 +52,9 @@ def plot_voronoi(voronoi_cells, width, height):
     plt.show()
 
 
+
+
+
 def calculate_num_sites(width, height):
     return int(math.sqrt(width * height))
 
@@ -59,7 +62,7 @@ def calculate_num_sites(width, height):
 if __name__ == "__main__":
     url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Leonardo_Magi.jpg/600px-Leonardo_Magi.jpg"
     # url = "https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftse1.mm.bing.net%2Fth%3Fid%3DOIP.bv5T6lKWlirzkkMt64og-wHaFh%26pid%3DApi&f=1&ipt=63038a6006335b1016ae0db1141fa061c5547086647d1198fcee20a8b2504b70&ipo=images"
-    image = Image.open(requests.get(url, stream=True).raw)
+    image = Image.open(urlopen(url))
     width, height = image.size
     num_sites = calculate_num_sites(width, height)
     print(width)
