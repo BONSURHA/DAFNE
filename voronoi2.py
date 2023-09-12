@@ -1,155 +1,122 @@
-from PIL import Image, ImageDraw
 import math
-import random
 import os
+import shutil
 from urllib.request import urlopen
+from io import BytesIO
+import numpy as np
+import cv2
+from PIL import Image, ImageDraw
+from scipy.spatial import Voronoi, voronoi_plot_2d
 
 
 def image_name(url):
-
     split_url = url.split("/")
     file_name = split_url[-1]
     name, _ = os.path.splitext(file_name)
     return name
 
 
-# Funzione per calcolare la distanza euclidea tra due punti
-def euclidean_distance(p1, p2):
-    return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+def download_image_from_url(url):
+    response = urlopen(url)
+    if response.getcode() == 200:
+        image_data = BytesIO(response.read())
+        image = cv2.imdecode(np.frombuffer(image_data.read(), np.uint8), -1)
+        return image
+    else:
+        raise Exception(f"Failed to download image from URL: {url}")
 
 
-# Funzione per trovare la cella Voronoi più vicina a un punto
-def find_closest_cell(point, sites):
-    closest_site = None
-    min_distance = float('inf')
-
-    for site in sites:
-        distance = euclidean_distance(point, site)
-        if distance < min_distance:
-            min_distance = distance
-            closest_site = site
-
-    return closest_site
+def generate_random_centers(width, height):
+    num_centers = int(math.sqrt((height*width)))
+    centers = np.random.randint(0, width, size=(num_centers, 2))
+    return centers
 
 
-# creare una tassellazione Voronoi
-def create_voronoi(width, height, num_sites):
-    # sites = [(random.randint(0, width), random.randint(0, height)) for _ in range(num_sites)]
-    sites = [(random.uniform(0, width), random.uniform(0, height)) for _ in range(num_sites)]
+def compute_voronoi_with_centers(width, height, centers):
+    vor = Voronoi(centers)
 
-    voronoi_cells = {site: [] for site in sites}
+    # Disegna i centri dei tasselli come punti rossi
+    centers_image = np.zeros((height, width, 3), dtype=np.uint8)
+    centers_image[:, :, :] = (255, 255, 255)  # Colore di base
+    for center in centers:
+        x, y = center
+        centers_image[y - 2:y + 3, x - 2:x + 3, :] = (255, 0, 0)  # Punto rosso
 
-    for x in range(width):
-        for y in range(height):
-            point = (x, y)
-            closest_site = find_closest_cell(point, sites)
-            voronoi_cells[closest_site].append(point)
-
-    return voronoi_cells
+    return vor, centers_image
 
 
-def calculate_num_sites(width, height):
-    return int(math.sqrt(width * height))
+def voronoi_image(url):
+    input_image = download_image_from_url(url)
+    height, width, _ = input_image.shape
+    centers = generate_random_centers(width, height)
+    vor, centers_image = compute_voronoi_with_centers(width, height, centers)
 
-
-# Funzione per creare un'immagine del frammento con dimensioni adattate alla cella
-def create_fragment_image(fragment_cell, input_image):
-    min_x = min(point[0] for point in fragment_cell)
-    max_x = max(point[0] for point in fragment_cell)
-    min_y = min(point[1] for point in fragment_cell)
-    max_y = max(point[1] for point in fragment_cell)
-
-    fragment_width = max_x - min_x + 1
-    fragment_height = max_y - min_y + 1
-
-    fragment_image = Image.new("RGBA", (fragment_width, fragment_height))
-    draw = ImageDraw.Draw(fragment_image)
-
-    for point in fragment_cell:
-        x, y = point
-        pixel = input_image.getpixel((x, y))
-        draw.point((x - min_x, y - min_y), fill=pixel)
-
-    return fragment_image
-
-
-# Funzione per calcolare il centroide di una cella Voronoi
-def calculate_centroid(cell):
-    num_points = len(cell)
-    if num_points == 0:
-        return None
-
-    sum_x = sum(point[0] for point in cell)
-    sum_y = sum(point[1] for point in cell)
-    centroid_x = sum_x / num_points
-    centroid_y = sum_y / num_points
-    return (centroid_x, centroid_y)
-
-# Modifica della funzione create_voronoi per restituire anche i centroidi delle celle Voronoi
-def create_voronoi_with_centroids(width, height, num_sites):
-    sites = [(random.randint(0, width), random.randint(0, height)) for _ in range(num_sites)]
-    voronoi_cells = {site: [] for site in sites}
-
-    for x in range(width):
-        for y in range(height):
-            point = (x, y)
-            closest_site = find_closest_cell(point, sites)
-            voronoi_cells[closest_site].append(point)
-
-    voronoi_centroids = {site: calculate_centroid(cell) for site, cell in voronoi_cells.items()}
-    return voronoi_cells, voronoi_centroids
-
-
-# Funzione per suddividere l'immagine in frammenti e salvarli uno a uno
-def split_and_save_fragments(url, output_directory):
-    input_image = Image.open(urlopen(url))
-    width, height = input_image.size
-    num_sites = calculate_num_sites(width, height)
-    print(width)
-    print(height)
-    print(num_sites)
-
-    path = output_directory + "/" + image_name(url) + str(int(random.uniform(0,1000)))
-
-    try:
-        os.mkdir(path)
-        print("Folder %s created!" % path)
-        voronoi_cells = create_voronoi(width, height, num_sites)
-
-        for site, fragment_cell in voronoi_cells.items():
-            fragment_image = create_fragment_image(fragment_cell, input_image)
-            fragment_image.save(f"{path}/fragment_{site}.png")
-
-    except FileExistsError:
-        print("Folder %s already exists" % path)
-
-
-def split_and_save_fragments_1(url, output_directory):
-    input_image = Image.open(urlopen(url))
-    width, height = input_image.size
-    num_sites = calculate_num_sites(width, height)
-    print(width)
-    print(height)
-    print(num_sites)
-
-    sites = [(random.randint(0, width), random.randint(0, height)) for _ in range(num_sites)]
-
-    voronoi_cells, voronoi_centroids = create_voronoi_with_centroids(width, height, num_sites)
-
-    # Salva le informazioni dei frammenti su un file di testo
-    with open(f"{output_directory}/fragment_info.txt", "w") as info_file:
-        for site, fragment_cell in voronoi_cells.items():
-            # Scrivi le informazioni dei frammenti (site e centro) nel file di testo
-            info_file.write(f"Fragment {site}:\n")
-            info_file.write(f"Centroid: {voronoi_centroids[site]}\n\n")
+    fragments = []
 
 
 
-# prova
+    for idx, region in enumerate(vor.regions):
+        if -1 in region or not region:
+            continue
+        polygon = [vor.vertices[i] for i in region]
+
+        # Calcola le dimensioni del frammento e arrotondali a interi
+        min_x, min_y = min(polygon, key=lambda p: p[0]), min(polygon, key=lambda p: p[1])
+        max_x, max_y = max(polygon, key=lambda p: p[0]), max(polygon, key=lambda p: p[1])
+        fragment_width = int(max_x[0] - min_x[0])
+        fragment_height = int(max_y[1] - min_y[1])
+
+        # Crea un'immagine RGBA con sfondo trasparente
+        fragment = Image.new('RGBA', (fragment_width, fragment_height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(fragment)
+
+        # Sposta il poligono alla posizione corretta e arrotonda le coordinate
+        shifted_polygon = [(int(p[0] - min_x[0]), int(p[1] - min_y[1])) for p in polygon]
+
+        # Disegna il poligono con sfondo trasparente
+        draw.polygon(shifted_polygon, fill=(255, 255, 255, 255), outline=None)
 
 
-if __name__ == "__main__":
-    output_directory = "./output"
-    url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Leonardo_Magi.jpg/600px-Leonardo_Magi.jpg"
-    print(output_directory)
-    split_and_save_fragments_1(url, output_directory)
+        if idx < len(centers):
+            fragments.append((fragment, centers[idx]))
+
+    return fragments
+
+
+
+def dafne(url, output_directory):
+
+
+    path = output_directory + "/" + image_name(url)
+    path_resources = output_directory + "/" + image_name(url) + "/resources"
+    path_fragments = output_directory + "/" + image_name(url) + "/fragments"
+    path_fragments_eroded = output_directory + "/" + image_name(url) + "/fragments/fragments_eroded"
+    path_fragments_normal = output_directory + "/" + image_name(url) + "/fragments/fragments_normal"
+
+    if os.path.exists(f"{path}"):
+        shutil.rmtree(f"{path}", ignore_errors=True)
+
+    os.makedirs(path_resources)
+    os.mkdir(path_fragments)
+    os.mkdir(path_fragments_eroded)
+    os.mkdir(path_fragments_normal)
+
+    fragments = voronoi_image(url)
+
+    for idx, (fragment, center) in enumerate(fragments):
+
+        # fragment = Image.fromarray(fragment)
+        filename = os.path.join(path_fragments_normal, f'fragment_{center}.png')
+
+        fragment.save(filename)
+
+
+
+
+
+
+# Esempio di utilizzo:
+url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Leonardo_Magi.jpg/600px-Leonardo_Magi.jpg"
+output_directory = "output"
+dafne(url, output_directory)
+
