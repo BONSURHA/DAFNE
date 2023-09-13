@@ -17,6 +17,7 @@ def calculate_points(height, width):
 def find_closest_fragment(selected_fragment, fragments):
     min_distance = float('inf')
     closest_fragment = None
+    closest_point = None
     sel_point, _ = selected_fragment
 
     for point, fragment in fragments:
@@ -32,7 +33,7 @@ def find_closest_fragment(selected_fragment, fragments):
 
 def combine_fragment(fragments, voronoi_cells, image, num_combined_fragments):
     selected_fragments = random.sample(fragments, num_combined_fragments)
-    combined_fragments = []
+    combined_fragments = fragments
 
     for selected_fragment in selected_fragments:
         closest_fragment = find_closest_fragment(selected_fragment, fragments)
@@ -45,11 +46,14 @@ def combine_fragment(fragments, voronoi_cells, image, num_combined_fragments):
         combined_fragment = Image.new("RGBA", (width, height))
         draw = ImageDraw.Draw(combined_fragment)
 
-        if selected_fragment[0] < closest_fragment[0]:
+        if selected_fragment[0][0] < closest_fragment[0][0]:
             min_x = min(point[0] for point in selected_cell)
-            min_y = min(point[1] for point in selected_cell)
         else:
             min_x = min(point[0] for point in closest_cell)
+
+        if selected_fragment[0][1] < closest_fragment[0][1]:
+            min_y = min(point[1] for point in selected_cell)
+        else:
             min_y = min(point[1] for point in closest_cell)
 
 
@@ -58,20 +62,29 @@ def combine_fragment(fragments, voronoi_cells, image, num_combined_fragments):
             pixel = image.getpixel((x, y))
             draw.point((x - min_x, y - min_y), fill=pixel)
 
-
-
         for point in closest_cell:
             x, y = point
             pixel = image.getpixel((x, y))
             draw.point((x - min_x, y - min_y), fill=pixel)
 
-        combined_fragments.append((selected_fragment[0],combined_fragment))
+        x = int((selected_fragment[0][0] + closest_fragment[0][0])/2)
+        y = int((selected_fragment[0][1] + closest_fragment[0][1])/2)
+
+        combined_point = (x, y)
+        combined_fragments.remove(selected_fragment)
+        combined_fragments.remove(closest_fragment)
+        combined_fragments.append((combined_point, combined_fragment))
 
     return combined_fragments
 
 
-        
+def random_fragments_removal(fragments, percentage):
+    fragments_list = fragments
+    fragments_to_remove = random.sample(fragments, int((len(fragments_list)*percentage)))
+    for fragment_to_remove in fragments_to_remove:
+        fragments_list.remove(fragment_to_remove)
 
+    return fragments_list
 
 def save_fragments_to_folder(fragments, folder_path):
 
@@ -144,7 +157,7 @@ def find_closest_cell(point, points):
     return closest_point
 
 
-def DAFNE(url, output_directory, num_combined_fragment):
+def DAFNE(url, output_directory, num_combined_fragment, percentage):
     image = Image.open(urlopen(url))
     width, height = image.size
     points = calculate_points(width, height)
@@ -165,18 +178,29 @@ def DAFNE(url, output_directory, num_combined_fragment):
 
     fragments = create_fragment_image(voronoi_cells, image)
 
+    print(len(fragments))
+
     combined_fragments = combine_fragment(fragments, voronoi_cells, image, num_combined_fragment)
 
-    save_fragments_to_folder(combined_fragments, path_fragment)
+    print(len(fragments))
+
+    fragments = random_fragments_removal(combined_fragments, percentage)
+
+    print(len(fragments))
+
+    # save_fragments_to_folder(combined_fragments, path_fragment)
 
     # save_fragments_to_folder(fragments, path_fragment)
+
+
 
 
 if __name__ == "__main__":
     output_directory = "./output"
     url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Leonardo_Magi.jpg/600px-Leonardo_Magi.jpg"
     num_combined_fragment = 10
-    DAFNE(url, output_directory, num_combined_fragment)
+    percentage = 0.2
+    DAFNE(url, output_directory, num_combined_fragment, percentage)
 
 
 
