@@ -2,7 +2,10 @@ import os
 import math
 import shutil
 import random
+
+import cv2
 import numpy as np
+
 from PIL import Image, ImageDraw
 from urllib.request import urlopen
 
@@ -56,7 +59,6 @@ def combine_fragment(fragments, voronoi_cells, image, num_combined_fragments):
         else:
             min_y = min(point[1] for point in closest_cell)
 
-
         for point in selected_cell:
             x, y = point
             pixel = image.getpixel((x, y))
@@ -86,13 +88,16 @@ def random_fragments_removal(fragments, percentage):
 
     return fragments_list
 
-def save_fragments_to_folder(fragments, folder_path):
 
+def save_fragments_to_folder(fragments, folder_path, path):
     for i, fragment in enumerate(fragments):
         # Define the file path for the fragment
         file_path = os.path.join(folder_path, f'fragment_{i}.png')
         # Save the fragment as a PNG image
         fragment[1].save(file_path, 'PNG')
+        with open(f"{path}/fragment_info.txt", "a") as info_file:
+            info_file.write(f"fragment_{i}.png: {fragment[1]},{fragment[0]},{fragment[2]}\n")
+            info_file.write("\n")
 
 
 def image_name(url):
@@ -128,6 +133,33 @@ def create_fragment_image(voronoi_cells, input_image):
     return fragments
 
 
+def fragment_erosion(fragments):
+    eroded_fragments = []
+
+    for point, fragment in fragments:
+
+        fragment_array = np.array(fragment)
+
+        # fragment_array = cv2.cvtColor(fragment_array, cv2.COLOR_RGBA2BGRA)
+
+        height, width, _ = fragment_array.shape
+
+        # first erosion
+        # kernel_size = (max(3, width // 20), max(3, height // 20))
+        # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+
+        # eroded_fragment_array = cv2.erode(fragment_array, kernel, cv2.BORDER_REFLECT)
+
+        # second erosion
+        kernel_5 = np.ones((5, 5), np.uint8)
+        eroded_fragment_array = cv2.erode(fragment_array, kernel_5, cv2.BORDER_REFLECT)
+        # eroded_fragment_array = cv2.cvtColor(eroded_fragment_array, cv2.COLOR_BGRA2RGBA)
+        eroded_fragment = Image.fromarray(eroded_fragment_array)
+        eroded_fragments.append((point, eroded_fragment))
+
+    return eroded_fragments
+
+
 def create_voronoi(width, height, points):
     voronoi_cells = {point: [] for point in points}
 
@@ -157,11 +189,20 @@ def find_closest_cell(point, points):
     return closest_point
 
 
+def rotate_fragment(fragments):
+    rotate_fragments = []
+
+    for point, fragment in fragments:
+        angle = random.uniform(0, 360)
+        fragment.rotate(angle, expand=True)
+        rotate_fragments.append((point, fragment, angle))
+    return rotate_fragments
+
+
 def DAFNE(url, output_directory, num_combined_fragment, percentage):
     image = Image.open(urlopen(url))
     width, height = image.size
     points = calculate_points(width, height)
-    n = len(points)
 
     path = output_directory + "/" + image_name(url)
 
@@ -169,28 +210,27 @@ def DAFNE(url, output_directory, num_combined_fragment, percentage):
         shutil.rmtree(path)
 
     path = output_directory + "/" + image_name(url) + "/resources"
-    path_fragment = output_directory + "/" + image_name(url) + "/fragments"
+    path_normal_fragment = output_directory + "/" + image_name(url) + "/fragments/normal_fragment"
+    path_eroded_fragment = output_directory + "/" + image_name(url) + "/fragments/eroded_fragment"
 
     os.makedirs(path)
-    os.mkdir(path_fragment)
+    os.makedirs(path_normal_fragment)
+    os.mkdir(path_eroded_fragment)
 
     voronoi_cells = create_voronoi(width, height, points)
 
     fragments = create_fragment_image(voronoi_cells, image)
 
-    print(len(fragments))
-
     combined_fragments = combine_fragment(fragments, voronoi_cells, image, num_combined_fragment)
-
-    print(len(fragments))
 
     fragments = random_fragments_removal(combined_fragments, percentage)
 
-    print(len(fragments))
+    # eroded_fragments = fragment_erosion(fragments)
 
-    # save_fragments_to_folder(combined_fragments, path_fragment)
+    fragments = rotate_fragment(fragments)
 
-    # save_fragments_to_folder(fragments, path_fragment)
+    save_fragments_to_folder(fragments, path_normal_fragment, path)
+    # save_fragments_to_folder(eroded_fragments, path_eroded_fragment)
 
 
 
