@@ -187,6 +187,8 @@ def fragment_erosion(fragments, min_distance, erosion_probability, erosion_perce
     for point, fragment in fragments:
 
         fragment_array = np.array(fragment)
+
+        max_size = fragment.size
     
         gray_array = cv2.cvtColor(fragment_array, cv2.COLOR_RGBA2GRAY)
 
@@ -195,29 +197,25 @@ def fragment_erosion(fragments, min_distance, erosion_probability, erosion_perce
         # first erosion
         if this_erosion_probability >= erosion_probability:
             this_erosion_percentage = random.uniform(1, erosion_percentage)
-            # size = int(this_erosion_percentage * 0.01 * min(max_size[0], max_size[1]))
+            angle = random.uniform(0, 360)
+
             size_1 = int(this_erosion_percentage * 0.01 * max_size[0])
             size_2 = int(this_erosion_percentage * 0.01 * max_size[1])
             if size_1 <= 0 or size_2 <= 0:
                 size_1 = max(int(erosion_percentage * 0.01 * min(max_size[0], max_size[1])), 1, size_1) 
                 size_2 = max(int(erosion_percentage * 0.01 * min(max_size[0], max_size[1])), 1, size_2) 
             kernel_size = (size_1, size_2)
-            # kernel_size = (random.randint(1, max_size[0]),random.randint(1, max_size[1]))
-            # kernel = np.ones(kernel_size, np.uint8)
+            rotation = cv2.getRotationMatrix2D((kernel_size[0] // 2, kernel_size[1] // 2), angle, 1)
             kernel = np.ones(kernel_size, dtype=np.uint8)
-            # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
-            gray_array = cv2.erode(gray_array, kernel, iterations=1)
+            kernel_rotated = cv2.warpAffine(kernel, rotation, kernel_size, borderMode=cv2.BORDER_CONSTANT)
+            gray_array = cv2.erode(gray_array, kernel_rotated, iterations=1)
 
 
 
         # second erosion
-        angle = random.uniform(0, 360)
-        kernel_size = random.randint(5, min_distance)
-        rotation = cv2.getRotationMatrix2D((kernel_size // 2, kernel_size // 2), angle, 1)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-        kernel_rotated = cv2.warpAffine(kernel, rotation, (kernel_size, kernel_size), borderMode=cv2.BORDER_CONSTANT)
-        gray_array = cv2.erode(gray_array, kernel_rotated, iterations=1)
-        
+        radius = random.randint(5, min_distance)
+        kernel = np.ones((radius, radius), np.float32) / (radius ** 2)
+        gray_array = cv2.filter2D(gray_array, -1, kernel)
         
         fragment_array = cv2.bitwise_and(fragment_array, fragment_array, mask=gray_array)
         eroded_fragment = Image.fromarray(fragment_array)
@@ -331,9 +329,9 @@ def DAFNE(url, output_directory, percentage, num_fragments, min_distance, seed, 
     name = image_name(url) + "-" + date
     path = os.path.join(output_directory,name)
 
-    resources_path = os.path.join(output_directory,image_name(url),"resources")
-    normal_fragment_path = os.path.join(output_directory, image_name(url),"fragments/normal_fragment")
-    eroded_fragment_path = os.path.join(output_directory, image_name(url), "fragments/eroded_fragment")
+    resources_path = os.path.join(output_directory,name,"resources")
+    normal_fragment_path = os.path.join(output_directory, name,"fragments/normal_fragment")
+    eroded_fragment_path = os.path.join(output_directory, name, "fragments/eroded_fragment")
 
     os.makedirs(resources_path)
     os.makedirs(normal_fragment_path)
@@ -386,11 +384,11 @@ def read_input_from_file(file_path):
 def main():
 
     # default values 
-    seed = random.randint()
+    seed = 1000
     num_fragments = 200
     min_distance = 10
-    removal_percentage = 20
-    erosion_probability = 0.1
+    removal_percentage = 22.5
+    erosion_probability = 0.3
     erosion_percentage = 10
 
     script_directory = os.path.dirname(os.path.abspath(__file__))

@@ -159,7 +159,7 @@ def combine_fragment(fragments, voronoi_cells, image, num_combined_fragments):
         combined_fragments.append(((combined_point, diff), combined_fragment))
 
     fragments.extend(combined_fragments)
-
+    random.shuffle(fragments)
     return fragments
 
 
@@ -188,9 +188,7 @@ def find_the_smallest_fragment(fragments):
 
 def apply_random_color_degradation(image):
 
-    max_degradation_percentage = 1
-
-    factor = random.uniform(0.5, max_degradation_percentage)
+    factor = random.uniform(0.5, 1)
     r,g,b, a = image.split()
     cl_image = Image.merge('RGB', (r,g,b))
     cl_enhancer = ImageEnhance.Color(cl_image)
@@ -206,10 +204,11 @@ def apply_random_color_degradation(image):
 def fragment_erosion(fragments, min_distance, erosion_probability, erosion_percentage):
     eroded_fragments = []
     smallest_fragment = find_the_smallest_fragment(fragments)
-    max_size = smallest_fragment.size
+    min_size = smallest_fragment.size
 
     for point, fragment in fragments:
 
+        size = fragment.size
         fragment_array = np.array(fragment)
         gray_array = cv2.cvtColor(fragment_array, cv2.COLOR_RGBA2GRAY)
 
@@ -218,26 +217,20 @@ def fragment_erosion(fragments, min_distance, erosion_probability, erosion_perce
         # first erosion
         if this_erosion_probability >= erosion_probability:
             this_erosion_percentage = random.uniform(1, erosion_percentage)
-            # size = int(this_erosion_percentage * 0.01 * min(max_size[0], max_size[1]))
-            size_1 = int(this_erosion_percentage * 0.01 * max_size[0])
-            size_2 = int(this_erosion_percentage * 0.01 * max_size[1])
-            if size_1 <= 0 or size_2 <= 0:
-                size_1 = max(int(erosion_percentage * 0.01 * min(max_size[0], max_size[1])), 1, size_1) 
-                size_2 = max(int(erosion_percentage * 0.01 * min(max_size[0], max_size[1])), 1, size_2) 
+            angle = random.uniform(0, 360)
+            size_1 = max(int(erosion_percentage * 0.01 * size[0]), 1) 
+            size_2 = max(int(erosion_percentage * 0.01 * size[1]), 1) 
             kernel_size = (size_1, size_2)
-            # kernel_size = (random.randint(1, max_size[0]),random.randint(1, max_size[1]))
-            # kernel = np.ones(kernel_size, np.uint8)
+            rotation = cv2.getRotationMatrix2D((kernel_size[0] // 2, kernel_size[1] // 2), angle, 1)
             kernel = np.ones(kernel_size, dtype=np.uint8)
-            # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
-            gray_array = cv2.erode(gray_array, kernel, iterations=1)
+            kernel_rotated = cv2.warpAffine(kernel, rotation, kernel_size, borderMode=cv2.BORDER_CONSTANT)
+            gray_array = cv2.erode(gray_array, kernel_rotated, iterations=1)
 
         # second erosion
-        angle = random.uniform(0, 360)
-        kernel_size = random.randint(5, min_distance)
-        rotation = cv2.getRotationMatrix2D((kernel_size // 2, kernel_size // 2), angle, 1)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-        kernel_rotated = cv2.warpAffine(kernel, rotation, (kernel_size, kernel_size), borderMode=cv2.BORDER_CONSTANT)
-        gray_array = cv2.erode(gray_array, kernel_rotated, iterations=1)
+        radius = random.randint(min_distance, max(min_size[0], min_size[1]))
+        kernel = np.ones((radius, radius), np.float32) / (radius ** 2)
+        gray_array = cv2.filter2D(gray_array, -1, kernel)
+        
         
         
         fragment_array = cv2.bitwise_and(fragment_array, fragment_array, mask=gray_array)
@@ -335,7 +328,6 @@ def DAFNE(url, output_directory, percentage, num_fragments, min_distance, seed, 
     voronoi_cells = create_voronoi(width, height, points)
     fragments = create_fragment_image(voronoi_cells, image)
     combined_fragments = combine_fragment(fragments, voronoi_cells, image, num_combined_fragment)
-    random.shuffle(combined_fragments)
     fragments = random_fragments_removal(combined_fragments, percentage)
     eroded_fragments = fragment_erosion(fragments, min_distance, erosion_probability, erosion_percentage)
     image_ricostructed(image, eroded_fragments, path)
@@ -370,17 +362,17 @@ def main():
 
     # default values 
     seed = 1000
-    num_fragments = 200
+    num_fragments = 100
     min_distance = 6
     removal_percentage = 10
-    erosion_probability = 0.2
-    erosion_percentage = 10
+    erosion_probability = 0.1
+    erosion_percentage = 10    
     #
 
     output_directory = os.path.dirname(os.path.abspath(__file__))
 
     parser = argparse.ArgumentParser(description='preleva un immagine per generare un dataset di frammenti utilizzando dei paramentri forniti dal file di testo in input')
-    parser.add_argument('input_directory', type=str, help='Percorso della cartella di input')
+    parser.add_argument('input_directory', type=str, help='Percorso della cartella di input che contiene le immagini')
     parser.add_argument('--output_directory', type=str, help='Percorso della cartella di output', required= False)
     parser.add_argument('--file_path', type=str, help='Percorso del file di testo di input, se non specificato vi sono dei valori di default', required= False)
 
@@ -388,7 +380,6 @@ def main():
 
     input_directory = args.input_directory
     
-
     if args.output_directory is not None:
         output_directory = args.output_directory
 
@@ -410,11 +401,13 @@ def main():
             info_file.write(f"erosion_probability: {erosion_probability}\n")
             info_file.write(f"erosion_percentage: {erosion_percentage}\n")
 
+    img_extension = ['.jpg', '.jpeg', '.png']
+
     for filename in os.listdir(input_directory):
         file_path = os.path.join(input_directory, filename)
 
 
-        if os.path.isfile(file_path) is not None:
+        if os.path.isfile(file_path) is not None and filename.endswith(tuple(img_extension)):
             DAFNE(file_path, output_directory, removal_percentage, num_fragments, min_distance, seed, erosion_probability, erosion_percentage)
 
 
