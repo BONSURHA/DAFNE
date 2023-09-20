@@ -1,0 +1,6 @@
+seed: 1000
+num_fragments: 200
+min_distance: 6
+removal_percentage: 10
+erosion_probability: 0.2
+erosion_percentage: 10
