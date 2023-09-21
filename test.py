@@ -194,8 +194,8 @@ def apply_random_color_degradation(fragment):
     cl_image = Image.merge('RGB', (r,g,b))
     fragment_array = cv2.cvtColor(np.array(cl_image), cv2.COLOR_RGB2HSV)
 
-    s_degradation_factor = random.random()
-    v_degradation_factor = random.random()
+    s_degradation_factor = random.uniform(0.3, 1)
+    v_degradation_factor = random.uniform(0.8, 1)
 
     fragment_array[:, :, 1] = fragment_array[:, :, 1] * s_degradation_factor
     fragment_array[:, :, 2] = fragment_array[:, :, 2] * v_degradation_factor
