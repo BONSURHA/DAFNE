@@ -55,7 +55,7 @@ def create_voronoi(width, height, sites):
 
 # Esempio di utilizzo
 if __name__ == "__main__":
-    width = 500
+    width = 800
     height = 500
     num_sites = 200
 
