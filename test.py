@@ -1,4 +1,5 @@
 import os
+import sys 
 import argparse
 import math
 import datetime
@@ -238,8 +239,7 @@ def fragment_erosion(fragments, min_distance, erosion_probability, erosion_perce
         kernel = np.ones((radius, radius), np.float32) / (radius ** 2)
         gray_array = cv2.filter2D(gray_array, -1, kernel)
         
-        
-        
+
         fragment_array = cv2.bitwise_and(fragment_array, fragment_array, mask=gray_array)
         eroded_fragment = Image.fromarray(fragment_array)
         eroded_fragment = apply_random_color_degradation(eroded_fragment)
@@ -310,6 +310,14 @@ def save_info(fragments, path):
             file_path = f"fragment_{index}.png"
             info_file.write(f"{file_path}: {fragment[0]}, {fragment[2]}\n")
             info_file.write("\n")
+            
+            
+def update_progress_bar(iteration, total, bar_length=50):
+    progress = (iteration / total)
+    arrow = '=' * int(round(bar_length * progress))
+    spaces = ' ' * (bar_length - len(arrow))
+    sys.stderr.write(f'\r[{arrow + spaces}]')
+    sys.stderr.flush()
 
 
 def DAFNE(url, output_directory, percentage, num_fragments, min_distance, seed, erosion_probability, erosion_percentage):
@@ -331,29 +339,37 @@ def DAFNE(url, output_directory, percentage, num_fragments, min_distance, seed, 
 
     points = generate_random_points(min_distance, seed, num_fragments, width, height)
     num_combined_fragment = random.randint(1,int(math.sqrt(len(points))))
-    
-    print(num_fragments)
-    print(width)
-    print(height)
+
     # aggiungere barra di avanzamento e print("done") sullo standard error
-    print("creazione tassellazione di voronoi\n")
+    update_progress_bar(1, 100)
+    sys.stderr.write(f'create voronoi cells... {1}/{4}')
+    sys.stderr.flush()
     voronoi_cells = create_voronoi(width, height, points)
-    print("creazione frammenti\n")
+    update_progress_bar(50, 100)
+    sys.stderr.write(f'create fragments... {2}/{4}')
+    sys.stderr.flush()
     fragments = create_fragment_image(voronoi_cells, image)
     combined_fragments = combine_fragment(fragments, voronoi_cells, image, num_combined_fragment)
     # fragments = random_fragments_removal(combined_fragments, percentage)
-    print("erosione frammenti\n")
-    eroded_fragments = fragment_erosion(fragments, min_distance, erosion_probability, erosion_percentage)
+    update_progress_bar(70, 100)
+    sys.stderr.write(f'erode fragments... {3}/{4}')
+    sys.stderr.flush()
+    eroded_fragments = fragment_erosion(combined_fragments, min_distance, erosion_probability, erosion_percentage)
     image_ricostructed(image, eroded_fragments, path)
     angles = generate_random_angles(len(fragments))
-    print("rotazione frammenti\n")
     fragments = rotate_fragment(fragments, angles)
-    print("salvataggio frammenti\n")
     eroded_fragments = rotate_fragment(eroded_fragments, angles)
+    update_progress_bar(90, 100)
+    sys.stderr.write(f'save fragments... {4}/{4}')
+    sys.stderr.flush()
 
     # save_fragments_to_folder(fragments, normal_fragment_path)
     save_fragments_to_folder(eroded_fragments, eroded_fragment_path)
     save_info(eroded_fragments, resources_path)
+    update_progress_bar(0, 100)
+    sys.stderr.write(f'all fragments saved... {4}/{4}')
+    sys.stderr.flush()
+    sys.stderr.write('\nOperazione completata.\n')
     
 
 
@@ -426,6 +442,7 @@ def main():
 
         if os.path.isfile(file_path) is not None and filename.endswith(tuple(img_extension)):
             DAFNE(file_path, output_directory, removal_percentage, num_fragments, min_distance, seed, erosion_probability, erosion_percentage)
+            
 
 
 if __name__ == "__main__":
