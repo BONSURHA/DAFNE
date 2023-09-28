@@ -1,18 +1,11 @@
 import os
-import argparse
-import math
-import datetime
-import random
+import sys 
 import cv2
+import math
+import io_tools
+import random
 import numpy as np
-from PIL import Image, ImageDraw, ImageEnhance
-
-
-def image_name(url):
-    split_url = url.split("/")
-    file_name = split_url[-1]
-    name, _ = os.path.splitext(file_name)
-    return name
+from PIL import Image, ImageDraw
 
 
 def generate_random_points(min_distance, seed, num_fragments, width, height):
@@ -29,7 +22,7 @@ def generate_random_points(min_distance, seed, num_fragments, width, height):
         valid = True
 
         for point in points:
-            if euclidean_distance((x, y), point) < min_distance:
+            if euclidean_distance((x, y), point) < (2 * min_distance):
                 valid = False
                 break
 
@@ -89,7 +82,7 @@ def create_fragment_image(voronoi_cells, input_image):
             x, y = point
             pixel = input_image.getpixel((x, y))
             draw.point((x - min_x, y - min_y), fill=pixel)
-        fragments.append(((key, diff), fragment_image))
+        fragments.append((key, diff, fragment_image))
 
     return fragments
 
@@ -97,52 +90,52 @@ def create_fragment_image(voronoi_cells, input_image):
 def find_closest_fragment(selected_fragment, fragments):
     min_distance = float('inf')
     closest_fragment = None
-    closest_point = None
-    sel_point, _= selected_fragment
+    sel_point, _, _= selected_fragment
 
-    for point, fragment in fragments:
-        distance = euclidean_distance(sel_point[0], point[0])
+    for fragment in fragments:
+        point,_,_ = fragment
+        distance = euclidean_distance(sel_point, point)
         if distance < min_distance:
             min_distance = distance
             closest_fragment = fragment
-            closest_point = point
 
-    return (closest_point, closest_fragment)
+    return closest_fragment
 
 
 def combine_fragment(fragments, voronoi_cells, image, num_combined_fragments):
     selected_fragments = random.sample(fragments, num_combined_fragments)
     combined_fragments = []
+    fragments_list = fragments
 
     for removed_fragment in selected_fragments:
         if removed_fragment in fragments:
-            fragments.remove(removed_fragment)
+            fragments_list.remove(removed_fragment)
 
     for selected_fragment in selected_fragments:
         closest_fragment = find_closest_fragment(selected_fragment, fragments)
-        selected_cell = voronoi_cells[selected_fragment[0][0]]
-        closest_cell = voronoi_cells[closest_fragment[0][0]]
+        selected_cell = voronoi_cells[selected_fragment[0]]
+        closest_cell = voronoi_cells[closest_fragment[0]]
 
-        width = selected_fragment[1].width + closest_fragment[1].width
-        height = selected_fragment[1].height + closest_fragment[1].height
+        width = selected_fragment[2].width + closest_fragment[2].width
+        height = selected_fragment[2].height + closest_fragment[2].height
 
         combined_fragment = Image.new("RGBA", (width, height))
         draw = ImageDraw.Draw(combined_fragment)
 
-        x = int((selected_fragment[0][0][0] + closest_fragment[0][0][0])/2)
-        y = int((selected_fragment[0][0][1] + closest_fragment[0][0][1])/2)
+        x = int((selected_fragment[0][0] + closest_fragment[0][0])/2)
+        y = int((selected_fragment[0][1] + closest_fragment[0][1])/2)
 
         combined_point = (x, y)
 
-        if selected_fragment[0][0][0] < closest_fragment[0][0][0]:
-            min_x = min(point[0] for point in selected_cell)
+        if selected_fragment[0][0] < closest_fragment[0][0]:
+            min_x = selected_fragment[1][0]
         else:
-            min_x = min(point[0] for point in closest_cell)
+            min_x = closest_fragment[1][0]
 
-        if selected_fragment[0][0][1] < closest_fragment[0][0][1]:
-            min_y = min(point[1] for point in selected_cell)
+        if selected_fragment[0][1] < closest_fragment[0][1]:
+            min_y = selected_fragment[1][1]
         else:
-            min_y = min(point[1] for point in closest_cell)
+            min_y = closest_fragment[1][1]
 
         diff = (min_x, min_y)
 
@@ -155,20 +148,11 @@ def combine_fragment(fragments, voronoi_cells, image, num_combined_fragments):
             pixel = image.getpixel((x, y))
             draw.point((x - min_x, y - min_y), fill=pixel)
 
-        fragments.remove(closest_fragment)
-        combined_fragments.append(((combined_point, diff), combined_fragment))
+        fragments_list.remove(closest_fragment)
+        combined_fragments.append((combined_point, diff, combined_fragment))
 
-    fragments.extend(combined_fragments)
-    random.shuffle(fragments)
-    return fragments
-
-# farlo relativo all'immagine -> farlo in uno script a parte e faccio salvare eliminando i frammenti, (provare ad aggiungere gli spuri, cartella in input, opzionale), pulendo il file in resources
-def random_fragments_removal(fragments, percentage):
-    fragments_list = fragments
-    fragments_to_remove = random.sample(fragments, int((len(fragments_list)*(percentage/100))))
-    for fragment_to_remove in fragments_to_remove:
-        fragments_list.remove(fragment_to_remove)
-
+    fragments_list.extend(combined_fragments)
+    random.shuffle(fragments_list)
     return fragments_list
 
 
@@ -176,7 +160,7 @@ def find_the_smallest_fragment(fragments):
     min_dimension = float('inf')
     smallest_fragment = None
     
-    for _, fragment in fragments:
+    for _, _, fragment in fragments:
         height,  width = fragment.size
         dimension =    height * width
         if dimension < min_dimension:
@@ -186,18 +170,20 @@ def find_the_smallest_fragment(fragments):
     return smallest_fragment
 
 
-def apply_random_color_degradation(image):
+def apply_random_color_degradation(fragment):
 
     # implementare hsv (lavorando su s e v, non h)
-    factor = random.uniform(0.5, 1)
-    r,g,b, a = image.split()
-    # cv2 rgb to rgba, ricreando in RGBA prelevando all'inizio il canale a 
+    r,g,b,a = fragment.split()
     cl_image = Image.merge('RGB', (r,g,b))
-    image_array = np.array(cl_image)
+    fragment_array = cv2.cvtColor(np.array(cl_image), cv2.COLOR_RGB2HSV)
 
-    cl_enhancer = ImageEnhance.Color(cl_image)
-    degraded = cl_enhancer.enhance(factor)
+    s_degradation_factor = random.uniform(0.5, 1)
+    v_degradation_factor = random.uniform(0.8, 1)
 
+    fragment_array[:, :, 1] = fragment_array[:, :, 1] * s_degradation_factor
+    fragment_array[:, :, 2] = fragment_array[:, :, 2] * v_degradation_factor
+
+    degraded = Image.fromarray(cv2.cvtColor(fragment_array, cv2.COLOR_HSV2RGB))
     r, g, b = degraded.split()
 
     degraded_image = Image.merge('RGBA', (r, g, b, a))
@@ -207,86 +193,56 @@ def apply_random_color_degradation(image):
 
 def fragment_erosion(fragments, min_distance, erosion_probability, erosion_percentage):
     eroded_fragments = []
+    probability = 1 - erosion_probability
     smallest_fragment = find_the_smallest_fragment(fragments)
     min_size = smallest_fragment.size
 
-    for point, fragment in fragments:
+    for point, diff,fragment in fragments:
 
         size = fragment.size
         fragment_array = np.array(fragment)
         gray_array = cv2.cvtColor(fragment_array, cv2.COLOR_RGBA2GRAY)
 
+
         this_erosion_probability = random.random()
 
         # first erosion
-        if this_erosion_probability >= (1 - erosion_probability):
-            this_erosion_percentage = random.uniform(1, erosion_percentage)
+        if this_erosion_probability >= probability:
+            total_fragment_pixel = cv2.countNonZero(gray_array)
+            ksize = int(math.sqrt(total_fragment_pixel) * erosion_percentage * 0.01)
             angle = random.uniform(0, 360)
-            size_1 = max(int(erosion_percentage * 0.01 * size[0]), 1) 
-            size_2 = max(int(erosion_percentage * 0.01 * size[1]), 1) 
-            kernel_size = (size_1, size_2)
+            kernel_size = (ksize, ksize)
             rotation = cv2.getRotationMatrix2D((kernel_size[0] // 2, kernel_size[1] // 2), angle, 1)
-            kernel = np.ones(kernel_size, dtype=np.uint8)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
             kernel_rotated = cv2.warpAffine(kernel, rotation, kernel_size, borderMode=cv2.BORDER_CONSTANT)
             gray_array = cv2.erode(gray_array, kernel_rotated, iterations=1)
 
         # second erosion
-        radius = random.randint(min_distance, max(min_size[0], min_size[1]))
+        radius = random.randint(min_distance//2, max(min_size[0], min_size[1])//2)
+        # radius = random.randint(1, min_distance//2)
         kernel = np.ones((radius, radius), np.float32) / (radius ** 2)
         gray_array = cv2.filter2D(gray_array, -1, kernel)
-        
-        
-        
         fragment_array = cv2.bitwise_and(fragment_array, fragment_array, mask=gray_array)
         eroded_fragment = Image.fromarray(fragment_array)
         eroded_fragment = apply_random_color_degradation(eroded_fragment)
-        eroded_fragments.append((point, eroded_fragment))
+        eroded_fragments.append((point, diff, eroded_fragment))
 
     return eroded_fragments
 
 
-def generate_random_angles(lenght):
-    angles = {}
-
-    for i in range(lenght):
-        angles[i] = random.uniform(0, 360)
-
-    return angles
-
-
-def rotate_fragment(fragments, angles):
+def rotate_fragment(fragments):
     rotate_fragments = []
 
-    for i, fragment in enumerate(fragments):
-        angle = angles[i]
-        rotated_fragment = fragment[1].rotate(angle, expand=True)
-        rotate_fragments.append((fragment[0], rotated_fragment, angle))
+    for fragment in fragments:
+        angle = random.uniform(0, 360)
+        point, diff, fragment_to_rotate = fragment
+        size = fragment_to_rotate.size
+        rotated_fragment = fragment_to_rotate.rotate(angle, expand=True)
+        size_rotate = rotated_fragment.size
+        diff_x = diff[0] - ((size_rotate[0] - size[0])//2)
+        diff_y = diff[1] - ((size_rotate[1] - size[1])//2)
+        rotate_fragments.append((point, (diff_x, diff_y), rotated_fragment, angle))
     return rotate_fragments
-
-# metterlo come altro eseguibile, prendendo la cartella in input
-def image_ricostructed(image, fragments, path):
-
-    image_path = os.path.join(path,"ricostructed_image.png")
-    final_image = Image.new('RGBA', image.size, (255, 255, 255, 0))
-    image_gray = Image.fromarray(cv2.cvtColor(cv2.cvtColor(np.array(image), cv2.COLOR_RGBA2GRAY), cv2.COLOR_GRAY2RGBA))
-    draw = ImageDraw.Draw(final_image)
-    alpha_value = 128
-    image_gray.putalpha(alpha_value)
-    final_image.paste(image_gray, (0, 0))
-
-    for point, fragment in fragments:
-       weight, height = fragment.size
-       _, _, _, a = fragment.split()
-
-       diff_x = point[1][0]
-       diff_y = point[1][1]
-       for x in range(weight):
-           for y in range(height):
-               if a.getpixel((x, y)) != 0:
-                pixel = fragment.getpixel((x, y))
-                draw.point((x + diff_x, y + diff_y), fill=pixel)
-
-    final_image.save(image_path, 'PNG')
 
 
 def save_fragments_to_folder(fragments, folder_path):
@@ -296,126 +252,59 @@ def save_fragments_to_folder(fragments, folder_path):
         index = str(i).zfill(n)
         file_path = os.path.join(folder_path, f'fragment_{index}.png')
         # Save the fragment as a PNG image
-        fragment[1].save(file_path, 'PNG')
+        fragment[2].save(file_path, 'PNG')
 
 
 def save_info(fragments, path):
     n = len(str(len(fragments)-1))
     for i, fragment in enumerate(fragments):
+        coordinate, diff, _, angle = fragment
         index = str(i).zfill(n)
         with open(f"{path}/fragment_info.txt", "a") as info_file:
-            file_path = f"fragment_{index}.png"
-            info_file.write(f"{file_path}: {fragment[0]}, {fragment[2]}\n")
+            file_path = f"fragment_{index}"
+            info_file.write(f"{file_path}: {coordinate}; {diff}; {angle}\n")
             info_file.write("\n")
 
 
-def DAFNE(url, output_directory, percentage, num_fragments, min_distance, seed, erosion_probability, erosion_percentage):
+def generate_info(resources_path, seed, num_fragments, min_distance, erosion_probability, erosion_percentage):
+    with open(f"{resources_path}/fragmentation_info.txt", "a") as info_file:
+        info_file.write(f"seed: {seed}\n")
+        info_file.write(f"num_fragments: {num_fragments}\n")
+        info_file.write(f"min_distance: {min_distance}\n")
+        info_file.write(f"erosion_probability: {erosion_probability}\n")
+        info_file.write(f"erosion_percentage: {erosion_percentage}\n")
+
+
+def generate_fragments(url, output_directory, num_fragments, min_distance, seed, erosion_probability, erosion_percentage):
     image = Image.open(url)
 
-    date = datetime.datetime.now()
-    date = date.strftime("%Y-%m-%d_%H-%M-%S")
-    name = image_name(url) + "-" + date
-    path = os.path.join(output_directory,name)
-    resources_path = os.path.join(output_directory,name,"resources")
-    normal_fragment_path = os.path.join(output_directory, name,"fragments/normal_fragment")
-    eroded_fragment_path = os.path.join(output_directory, name, "fragments/eroded_fragment")
+    name = io_tools.image_name(url)
+    path, resources_path, fragment_path = io_tools.create_folder(name, output_directory)
 
-    os.makedirs(resources_path)
-    os.makedirs(normal_fragment_path)
-    os.mkdir(eroded_fragment_path)
+    generate_info(resources_path, seed, num_fragments, min_distance, erosion_probability, erosion_percentage)
 
     width, height = image.size
 
     points = generate_random_points(min_distance, seed, num_fragments, width, height)
     num_combined_fragment = random.randint(1,int(math.sqrt(len(points))))
 
-    # aggiungere barra di avanzamento e print("done") sullo standard error
+    io_tools.update_progress_bar(0, 100, "create voronoi (this op might take long)", 1)
+    sys.stderr.flush()
+
     voronoi_cells = create_voronoi(width, height, points)
+    io_tools.update_progress_bar(25, 100, "create fragments", 2)
+
     fragments = create_fragment_image(voronoi_cells, image)
     combined_fragments = combine_fragment(fragments, voronoi_cells, image, num_combined_fragment)
-    fragments = random_fragments_removal(combined_fragments, percentage)
-    eroded_fragments = fragment_erosion(fragments, min_distance, erosion_probability, erosion_percentage)
-    image_ricostructed(image, eroded_fragments, path)
-    angles = generate_random_angles(len(fragments))
-    fragments = rotate_fragment(fragments, angles)
-    eroded_fragments = rotate_fragment(eroded_fragments, angles)
+    io_tools.update_progress_bar(50, 100, "erode fragments", 3)
+    sys.stderr.flush()
 
-    save_fragments_to_folder(fragments, normal_fragment_path)
-    save_fragments_to_folder(eroded_fragments, eroded_fragment_path)
+    eroded_fragments = fragment_erosion(combined_fragments, min_distance, erosion_probability, erosion_percentage)
+    eroded_fragments = rotate_fragment(eroded_fragments)
+    io_tools.update_progress_bar(75, 100, "save fragments", 4)
+    save_fragments_to_folder(eroded_fragments, fragment_path)
     save_info(eroded_fragments, resources_path)
-    
+    io_tools.update_progress_bar(100, 100, "fragments saved", 4)
+    sys.stderr.flush()
 
-
-def read_input_from_file(file_path):
-    input_data = {}
-
-    try:
-        with open(file_path, 'r') as file:
-            for line in file:
-                key, value = line.strip().split(':')
-                input_data[key.strip()] = value.strip()
-
-        return input_data
-    except FileNotFoundError:
-        print(f"File '{file_path}' non trovato.")
-        return None
-    except Exception as e:
-        print(f"Si è verificato un errore durante la lettura del file: {str(e)}")
-        return None
-
-
-def main():
-
-    # default values 
-    seed = 1000
-    num_fragments = 500
-    min_distance = 6
-    removal_percentage = 20
-    erosion_probability = 0.8
-    erosion_percentage = 30  
-    #
-
-    output_directory = os.path.dirname(os.path.abspath(__file__))
-
-    parser = argparse.ArgumentParser(description='preleva un immagine per generare un dataset di frammenti utilizzando dei paramentri forniti dal file di testo in input')
-    parser.add_argument('input_directory', type=str, help='Percorso della cartella di input che contiene le immagini')
-    parser.add_argument('--output_directory', type=str, help='Percorso della cartella di output', required= False)
-    parser.add_argument('--file_path', type=str, help='Percorso del file di testo di input, se non specificato vi sono dei valori di default', required= False)
-
-    args = parser.parse_args()
-
-    input_directory = args.input_directory
-    
-    if args.output_directory is not None:
-        output_directory = args.output_directory
-
-    if args.file_path is not None:
-        input_data = read_input_from_file(args.file_path)
-        seed = int(input_data.get("seed"))
-        num_fragments = int(input_data.get("num_fragments"))
-        min_distance = int(input_data.get("min_distance"))
-        removal_percentage = float(input_data.get("removal_percentage"))
-        erosion_probability = float(input_data.get("erosion_probability"))
-        erosion_percentage = float(input_data.get("erosion_percentage"))
-
-    elif not(os.path.exists(os.path.join(output_directory, "example_info.txt"))):
-        with open(f"{output_directory}/example_info.txt", "a") as info_file:
-            info_file.write(f"seed: {seed}\n")
-            info_file.write(f"num_fragments: {num_fragments}\n")
-            info_file.write(f"min_distance: {min_distance}\n")
-            info_file.write(f"removal_percentage: {removal_percentage}\n")
-            info_file.write(f"erosion_probability: {erosion_probability}\n")
-            info_file.write(f"erosion_percentage: {erosion_percentage}\n")
-
-    img_extension = ['.jpg', '.jpeg', '.png']
-
-    for filename in os.listdir(input_directory):
-        file_path = os.path.join(input_directory, filename)
-
-
-        if os.path.isfile(file_path) is not None and filename.endswith(tuple(img_extension)):
-            DAFNE(file_path, output_directory, removal_percentage, num_fragments, min_distance, seed, erosion_probability, erosion_percentage)
-
-
-if __name__ == "__main__":
-    main()
+    return path
