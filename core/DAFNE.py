@@ -1,10 +1,10 @@
 import os
 import sys
-import io_tools
+from . import io_tools
 import argparse
-import riconstruct_image
-import remove_fragments
-import fragmentation_erosion
+from . import riconstruct_image
+from . import remove_fragments
+from . import fragmentation_erosion
 
 
 def main():

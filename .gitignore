@@ -88,3 +88,8 @@ local_settings.py
 .ropeproject/
 .pytest_cache/
 
+
+# Project data folders
+input/
+output/
+

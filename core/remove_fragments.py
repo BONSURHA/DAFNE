@@ -3,10 +3,9 @@ import sys
 import random
 import shutil
 import argparse
-import io_tools
+from . import io_tools
 from PIL import Image
-import riconstruct_image
-
+from . import riconstruct_image
 
 
 
