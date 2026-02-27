@@ -2,7 +2,7 @@ import os
 import sys 
 import cv2
 import math
-import io_tools
+from . import io_tools
 import random
 import numpy as np
 from PIL import Image, ImageDraw

@@ -2,7 +2,7 @@ import os
 import cv2
 import sys
 import glob
-import io_tools
+from . import io_tools
 import numpy as np
 from PIL import Image, ImageDraw
 
