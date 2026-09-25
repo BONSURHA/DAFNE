@@ -55,10 +55,13 @@ DAFNE simulates the real-world deterioration and shattering of frescos and paint
 
 ### Example
 
-| Original Image | Reconstructed Output |
-| :---: | :---: |
-| <img src="docs/original.png" width="400"> | <img src="docs/ricostructed_image.png" width="400"> |
-| *Original source fresco* | *Synthetic fragmentation with erosion and missing pieces* |
+<p align="center">
+  <img src="docs/original.png" width="48%" title="Original source fresco" />
+  <img src="docs/ricostructed_image.png" width="48%" title="Synthetic fragmentation with erosion and missing pieces" />
+</p>
+<p align="center">
+  <em>Left: Original source fresco &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Right: Synthetic fragmentation with erosion and missing pieces</em>
+</p>
 
 ## Output structure
 
