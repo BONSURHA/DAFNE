@@ -16,33 +16,20 @@ Follow the platform section that matches your environment.
 
 Unix (macOS / Linux):
 
-1. Create and activate a virtual environment:
-
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-```
-
-2. Install runtime packages:
-
-```bash
 python -m pip install -r DAFNE/requirements.txt
 ```
 
 Windows (PowerShell):
-
-1. Create and activate a virtual environment:
 
 ```powershell
 python -m venv .venv
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-```
-
-2. Install runtime packages:
-```powershell
 python -m pip install -r DAFNE/requirements.txt
 ```
 
@@ -67,8 +54,22 @@ DAFNE simulates the real-world deterioration and shattering of frescos and paint
 6. **Defect Injection**: A percentage of fragments can be intentionally discarded (to simulate missing pieces), and spurious distractor fragments from other datasets can be injected.
 
 ### Example
-![Original Input Image](docs/original.png)
-*Left: Original source image. Right: Reconstructed output with synthetic fragmentation and missing pieces.*
+
+| Original Image | Reconstructed Output |
+| :---: | :---: |
+| <img src="docs/original.png" width="400"> | <img src="docs/ricostructed_image.png" width="400"> |
+| *Original source fresco* | *Synthetic fragmentation with erosion and missing pieces* |
+
+## Output structure
+
+For each processed image, DAFNE generates a timestamped output directory containing:
+
+- `fragments/`: Individual isolated fragment images (e.g., `fragment_000.png`) in RGBA format with transparent backgrounds.
+- `resources/`:
+  - `fragment_info.txt`: Ground truth coordinates, bounding box offsets, and rotation angles for every fragment.
+  - `fragmentation_info.txt`: The exact hyperparameter values used for the generation run.
+  - `spurious_info.txt`: *(Optional)* Count and filenames of injected distractor pieces.
+- `ricostructed_image.png`: A reassembled visual overlay showing the ground-truth alignment and erosion gaps.
 
 ## Running
 
